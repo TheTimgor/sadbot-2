@@ -1,0 +1,8 @@
+{
+  "prefix": "s#",
+  "token": "BOT TOKEN",
+  "training channels": [
+    channel ids
+  ],
+  "training backlog": 1000
+}
