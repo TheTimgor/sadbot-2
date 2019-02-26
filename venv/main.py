@@ -5,6 +5,7 @@ import asyncio
 import json
 import markovify
 from rake_nltk import Rake
+# import blocks
 
 startup = True
 
@@ -15,9 +16,7 @@ with open('config.json') as f:
 
 bot = commands.Bot(command_prefix=config['prefix'], self_bot=False)
 
-@bot.command()
-async def chat(ctx, *args):
-    message = ' '.join(args)
+def get_relevant_convos(message, context):
     r = Rake()
     r.extract_keywords_from_text(message)
     keywords = r.get_ranked_phrases()
@@ -38,14 +37,32 @@ async def chat(ctx, *args):
         for word in m.split():
             if word.lower() in keywords:
                 msg_since_relevant = 0
-        if msg_since_relevant < 20:
+        if msg_since_relevant < context:
             relevant_convos = m + '\n' + relevant_convos
         msg_since_relevant += 1
-    print(relevant_convos)
-    text_model = markovify.Text(relevant_convos)
-    response = text_model.make_sentence()
-    await ctx.send(response)
+    return relevant_convos
 
+def get_response(message):
+    context = 20
+    response = ''
+    while not response:
+        relevant_convos = get_relevant_convos(message, context)
+        if not relevant_convos:
+            l = reversed(history[:100])
+            relevant_convos = '\n'.join([x.lower() for x in l])
+        print(relevant_convos)
+        text_model = markovify.Text(relevant_convos)
+        response = text_model.make_sentence()
+        context += 10
+        if context > 1000:
+            break
+    return response
+
+@bot.command()
+async def chat(ctx, *args):
+    message = ' '.join(args)
+    response = get_response(message)
+    await ctx.send(response)
 
 
 @bot.event
@@ -56,7 +73,7 @@ async def on_ready():
         # print('Logged in')
         for chan_id in config['training channels']:
             chan = bot.get_channel(chan_id)
-            hist_itr = chan.history(limit=10000)
+            hist_itr = chan.history(limit=config['training backlog'])
             print('adding words from channel #%d' % chan_id)
             async for m in hist_itr:
                 history.append(m.content)
