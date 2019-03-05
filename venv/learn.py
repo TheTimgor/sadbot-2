@@ -5,10 +5,6 @@ import asyncio
 import json
 import markovify
 from rake_nltk import Rake
-from fastai.text import *
-from fastai.data_block import ItemBase, ItemList
-from torch.utils.data import Dataset
-import csv
 from itertools import chain
 import os
 import pickle
@@ -19,7 +15,6 @@ import pandas as pd
 from keras.models import Sequential
 from keras import layers
 
-
 startup = True
 
 h = []
@@ -28,6 +23,7 @@ with open('config.json') as f:
     config = json.load(f)
 
 bot = commands.Bot(command_prefix=config['prefix'], self_bot=False)
+
 
 @bot.event
 async def on_ready():
@@ -67,8 +63,8 @@ async def on_ready():
         vectorizer.fit(sentences_train)
         X_train = vectorizer.transform(sentences_train)
         X_test = vectorizer.transform(sentences_test)
-        print(X_train)
-        print(X_test)
+        # print(X_train)
+        # print(X_test)
 
         input_dim = X_train.shape[1]  # Number of features
 
@@ -86,6 +82,10 @@ async def on_ready():
         loss, accuracy = model.evaluate(X_test, y_test, verbose=False)
         print("Testing Accuracy:  {:.4f}".format(accuracy))
 
+        prediction = model.predict(vectorizer.transform(['oh my god no            hot']).toarray())
+        print(prediction)
+
+        model.save('my_model.h5')
         print('done')
 
 

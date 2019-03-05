@@ -4,5 +4,6 @@
   "training channels": [
     channel ids
   ],
-  "training backlog": 1000
+  "training backlog": 10000,
+  "nn backlog": 100
 }
