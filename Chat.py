@@ -6,7 +6,7 @@ from statistics import mean
 from random import choice
 import pandas as pd
 from scipy.spatial.distance import cosine
-import spell
+from spell import correct
 
 # change nltk data path
 nltk.data.path = ['nltk_data']
@@ -48,7 +48,7 @@ response_types = {
     'nAnswer':      ['Statement', 'Emotion', 'Emphasis'],
     'whQuestion':   ['Statement'],
     'yAnswer':      ['Accept', 'Reject', 'Statement', 'Emotion', 'Emphasis'],
-    'ynQuestion':   ['nAnswer', 'yAnswer', 'Accept', 'Reject']
+    'ynQuestion':   ['nAnswer', 'yAnswer']
 }
 
 
@@ -121,9 +121,7 @@ except FileNotFoundError:
 # TODO: make this faster
 def get_responses(message, weights=word_weights, sents=categorized_sentences, clas=classifier, threshold=0.4, n=10):
     # pre tokenize and spelling correct message
-    # TODO: better spellchecker
-    tkn_message = nltk.word_tokenize(message)
-    tkn_message = [spell.correction(w) for w in tkn_message]
+    tkn_message = nltk.word_tokenize(correct(message))
     print(tkn_message)
     has_non_stop = False
     # check if message has any words that are in the dictionary
@@ -132,6 +130,7 @@ def get_responses(message, weights=word_weights, sents=categorized_sentences, cl
             has_non_stop = True
     # get response types
     typs = response_types[clas.classify(sentence_features(tkn_message))]
+    print(typs)
     relevant = []
     i = 0
     # if some words are in the dictionary, look for a sentence with sufficient similarity
@@ -190,12 +189,11 @@ def generate_word_weights(hist):
     return weights
 
 
-# generates spellchecker, word probability weights, and categorized sentences
+# generates word probability weights and categorized sentences
 # dumps word weights and categorized sentences to file
 def generate_model(hist):
     global word_weights
     global categorized_sentences
-    spell.setWORDS(nltk.word_tokenize('\n'.join(hist)))
     word_weights = generate_word_weights(hist)
     f = open('word_weights.pickle', 'wb')
     pickle.dump(word_weights, f)
@@ -226,8 +224,6 @@ if __name__ == '__main__':
         f = open('categorized_sentences.pickle', 'wb')
         pickle.dump(categorized_sentences, f)
         f.close()
-    # set up spellchecker
-    spell.setWORDS(nltk.word_tokenize('\n'.join(h)))
     # converse!
     while True:
         m = input('>>> ')
