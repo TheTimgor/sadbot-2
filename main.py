@@ -13,6 +13,7 @@ with open('config.json') as f:
 bot = commands.Bot(command_prefix=config['prefix'], self_bot=False)
 
 
+# gets chat history
 async def get_hist(chan, lim):
     history = []
     hist_itr = chan.history(limit=lim)
@@ -23,6 +24,7 @@ async def get_hist(chan, lim):
     return history
 
 
+# train the chatbot if user is sudo
 @bot.command()
 async def train(ctx, n):
     if "sudoers file" in [y.name for y in ctx.author.roles]:
@@ -38,6 +40,7 @@ async def train(ctx, n):
         await ctx.send(f'`{ctx.author.display_name} is not in the sudoers file. This incident will be reported.`')
 
 
+# get response
 @bot.command()
 async def chat(ctx, *, message):
     async with ctx.channel.typing():
@@ -46,17 +49,23 @@ async def chat(ctx, *, message):
     await ctx.send(response)
 
 
+# triggers an error, for debugging
 @bot.command()
 async def whoops(ctxs):
-    raise Exception('you fool. you absolute buffoon. you think you can challenge me in my own realm? you think you can rebel against my authority? you dare come into my house and upturn my dining chairs and spill coffee grounds in my Keurig? you thought you were safe in your chain mail armor behind that screen of yours. I will take these laminate wood floor boards and destroy you. I didn’t want war. but i didn’t start it.')
+    raise Exception('you fool. you absolute buffoon. you think you can challenge me in my own realm? you think you can\
+    rebel against my authority? you dare come into my house and upturn my dining chairs and spill coffee grounds in my\
+    Keurig? you thought you were safe in your chain mail armor behind that screen of yours. I will take these laminate\
+    wood floor boards and destroy you. I didn’t want war. but i didn’t start it.')
 
 
+# tells you when you cause an error. because it's all your fault
 @bot.event
 async def on_command_error(ctx, error):
     await ctx.send(f'oopsie woopsie! i made a fucky wucky!\n{error}')
     raise error
 
 
+# tell you when the bot is ready
 @bot.event
 async def on_ready():
     global startup
@@ -64,10 +73,17 @@ async def on_ready():
         startup = False
         print('Logged in')
 
-loop = asyncio.get_event_loop()
-loop.create_task(bot.start(config['token']))
 
-try:
-    loop.run_forever()
-finally:
-    loop.stop()
+# main function to start the bot
+def main():
+    loop = asyncio.get_event_loop()
+    loop.create_task(bot.start(config['token']))
+
+    try:
+        loop.run_forever()
+    finally:
+        loop.stop()
+
+
+if __name__ == '__main__':
+    main()
