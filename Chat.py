@@ -3,13 +3,23 @@ import nltk
 from nltk.corpus import nps_chat
 from nltk.corpus import stopwords
 from statistics import mean
-from random import choice
+from random import choice, choices
 import pandas as pd
 from scipy.spatial.distance import cosine
 from spell import correct
+from augmented_markov import AugmentedChain
+import matplotlib.pyplot as plt
 
 # change nltk data path
 nltk.data.path = ['nltk_data']
+
+# load up markov model if found
+try:
+    f = open('markov_model.pickle', 'rb')
+    m_model = pickle.load(f)
+    f.close()
+except FileNotFoundError:
+    m_model = None
 
 # load up word weights if found
 try:
@@ -26,6 +36,15 @@ try:
     f.close()
 except FileNotFoundError:
     categorized_sentences = []
+
+# load up categorized sentences if found
+try:
+    f = open('sentence_clusters.pickle', 'rb')
+    sentence_clusters= pickle.load(f)
+    f.close()
+except FileNotFoundError:
+    sentence_clusters = []
+
 
 # preprocessing nps chat corpus for sentence classification
 all_words = nltk.FreqDist(w.lower() for w in nps_chat.words())
@@ -70,19 +89,22 @@ def unpack_weights(d):
     return {word: mean(unpacked[word]) for word in unpacked}
 
 
+def topic_vectorize_sent(sent, weights):
+    # gets a dict of word weights
+    sweights = {w: weights[w] for w in weights if w in sent}
+    # averages out word
+    stopics = unpack_weights(sweights)
+    # adds unrelated words back in
+    return {w: 0 if w not in stopics else stopics[w] for w in weights}
+
+
 # returns the similarity of two sentences
 def sent_similarity(sent1, sent2, weights):
-    # gets a dict of word weights for each word
-    s1weights = {w: weights[w] for w in weights if w in sent1}
-    s2weights = {w: weights[w] for w in weights if w in sent2}
-    # averages out word weights
-    s1topics = unpack_weights(s1weights)
-    s2topics = unpack_weights(s2weights)
-    # turns into a vector usable by scipy
-    s1vector = pd.Series({w: 0 if w not in s1topics else s1topics[w] for w in weights})
-    s2vector = pd.Series({w: 0 if w not in s2topics else s2topics[w] for w in weights})
+    # vectorize if not already
+    s1vector = topic_vectorize_sent(sent1, weights) if not type(sent1) == dict else sent1
+    s2vector = topic_vectorize_sent(sent2, weights) if not type(sent2) == dict else sent2
     # return similarity
-    return 1 - cosine(s1vector, s2vector)
+    return 1 - cosine(pd.Series(s1vector), pd.Series(s2vector))
 
 
 # vectorizes sentences for classifier
@@ -115,6 +137,33 @@ except FileNotFoundError:
     f = open('classifier.pickle', 'wb')
     pickle.dump(classifier, f)
     f.close()
+
+
+def show_clusters(sents):
+    l = [x[0] for x in choices(sents, k=1000)]
+    s = nltk.word_tokenize(choice(sents)[0])
+    d = []
+    for a in l:
+        sim = sent_similarity(nltk.word_tokenize(a), s, word_weights)
+        d.append(sim)
+    plt.hist(d, bins=20)
+    plt.show()
+
+
+def generate_clusters(sents=categorized_sentences, threshold=0.2, weights=word_weights):
+    clusters = []
+    while sents:
+        s = topic_vectorize_sent(nltk.word_tokenize(choice(sents)[0]), weights)
+        clusters.append((s, {}))
+        for sent, clas in sents:
+            svec = topic_vectorize_sent(nltk.word_tokenize(sent), weights)
+            sim = sent_similarity(s, svec, weights)
+            if sim >= threshold:
+                clusters[-1][1][sent] = (svec, clas)
+                sents.remove((sent, clas))
+        print('s', len(sents))
+        print('c', len(clusters))
+    return clusters
 
 
 # gets a list of valid responses
@@ -163,9 +212,10 @@ def get_responses(message, weights=word_weights, sents=categorized_sentences, cl
 
 
 # gets a single response
-def get_response(message, weights=word_weights, sents=categorized_sentences, clas=classifier, threshold=0.4, n=3):
-    responses = get_responses(message, weights, sents, clas, threshold, n)
-    return choice(responses)[0][0]
+def get_response(message, weights=word_weights, model=m_model):
+    v = topic_vectorize_sent(message, weights)
+    print({a:v[a] for a in v if v[a]>0})
+    return model.make_sentece(v)
 
 
 # generates a dict of probabilities that any given word will appear in a sentence with another word
@@ -194,6 +244,11 @@ def generate_word_weights(hist):
 def generate_model(hist):
     global word_weights
     global categorized_sentences
+    global m_model
+    m_model = AugmentedChain(hist)
+    f = open('markov_model.pickle', 'wb')
+    pickle.dump(m_model, f)
+    f.close()
     word_weights = generate_word_weights(hist)
     f = open('word_weights.pickle', 'wb')
     pickle.dump(word_weights, f)
@@ -202,14 +257,19 @@ def generate_model(hist):
     f = open('categorized_sentences.pickle', 'wb')
     pickle.dump(categorized_sentences, f)
     f.close()
-    print(word_weights)
-    print(categorized_sentences)
 
 
 # simple main function for testing
 if __name__ == '__main__':
     # using nps chat for testing
     h = [a.text for a in nps_chat.xml_posts()]
+    # generate markov model if not loaded
+    if not m_model:
+        print('generating markov model')
+        m_model = AugmentedChain(h[:10000])
+        f = open('markov_model.pickle', 'wb')
+        pickle.dump(m_model, f)
+        f.close()
     # get word weights if they weren't loaded
     if not word_weights:
         print('weighting words')
@@ -227,4 +287,5 @@ if __name__ == '__main__':
     # converse!
     while True:
         m = input('>>> ')
-        print(get_response(m))
+        v = topic_vectorize_sent(nltk.word_tokenize(m), word_weights)
+        print(m_model.make_sentece(v))
